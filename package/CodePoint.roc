@@ -13,6 +13,7 @@ module [
     toStr,
     eastAsianWidthProperty,
     visualWidth,
+    walkUtf8,
 ]
 
 import InternalCP exposing [CP, fromU32Unchecked]
@@ -122,7 +123,6 @@ appendUtf8 = \bytes, codePoint ->
         ## This was an invalid Unicode scalar value, even though it had the Roc type Scalar.
         ## This should never happen!
         # expect u32 < 0x110000
-
         byte1 =
             u32
             |> Num.shiftRightBy 18
@@ -242,21 +242,23 @@ parse4 = \first, second, third, fourth ->
 Utf8ParseErr : [OverlongEncoding, ExpectedContinuation, EncodesSurrogateHalf, InvalidUtf8, ListWasEmpty, CodepointTooLarge]
 
 ## Parses a list of bytes into a list of code points
-parseUtf8 : List U8 -> Result (List CodePoint) Utf8ParseErr
+# parseUtf8 : List U8 -> Result (List CodePoint) Utf8ParseErr
 parseUtf8 = \bytes ->
     # we will have at most List.len bytes code points
     listWithCapacity : List CodePoint
     listWithCapacity = List.withCapacity (List.len bytes)
-    parseUtf8Help bytes listWithCapacity
+    # parseUtf8Help bytes listWithCapacity
+    walkUtf8 bytes listWithCapacity List.append
 
-parseUtf8Help : List U8, List CodePoint -> Result (List CodePoint) Utf8ParseErr
-parseUtf8Help = \rest, cps ->
-    if List.isEmpty rest then
-        Ok cps
+## Takes in the bytes from an UTF8 string and iterates through its code points
+walkUtf8 : List U8, state, (state, CodePoint -> state) -> Result state Utf8ParseErr
+walkUtf8 = \bytes, state, op ->
+    if List.isEmpty bytes then
+        Ok state
     else
-        parsePartialUtf8 rest
+        parsePartialUtf8 bytes
         |> Result.try \{ codePoint, bytesParsed } ->
-            parseUtf8Help (List.dropFirst rest bytesParsed) (List.append cps codePoint)
+            walkUtf8 (List.dropFirst bytes bytesParsed) (op state codePoint) op
 
 # test simple ASCII "Hello"
 expect
